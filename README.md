@@ -5,6 +5,8 @@
 
 <h1 align="center">ImageCropper</h1>
 
+⚠️ **Current Status**: Development version – more features coming soon!
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
 [![PyQt5](https://img.shields.io/badge/PyQt5-5.15.2-green.svg)](https://pypi.org/project/PyQt5/)
@@ -16,7 +18,7 @@
 ## 📷 Introduction
 **ImageCropper** is an interactive image cropping tool built with Python and PyQt5. This tool allows you to open large images, select specific areas to crop, and save them efficiently to your local storage. It's designed to handle large images efficiently, displaying blocks of the image without consuming excessive memory.
 
-⚠️ **Current Status**: Development version – more features coming soon!
+
 
 ---
 
