@@ -1,5 +1,9 @@
 
-# ![ImageCropper](logoImageCropper.jfif) ImageCropper
+<div align="center">
+  <img src="logoImageCropper.jfif" alt="ImageCropper" width="200" height="200"/>
+</div>
+
+<h1 align="center">ImageCropper</h1>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
