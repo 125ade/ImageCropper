@@ -87,7 +87,9 @@ class ImageCropper(QMainWindow):
         self.zoom_factor = 1.0
         self.image_path = None
         self.crop_size = 100  # Dimensione crop di default
-        self.crop_folder = None  # Cartella per salvare i crop
+        self.image_label.set_crop_size(self.crop_size)  # Imposta la dimensione del crop nell'etichetta dell'immagine
+
+        self.crop_folder = None  # Inizializza la cartella di destinazione
 
         self.x_offset = 0
         self.y_offset = 0
@@ -108,6 +110,38 @@ class ImageCropper(QMainWindow):
         open_action.setShortcut('Ctrl+O')
         open_action.triggered.connect(self.open_image)
         self.toolbar.addAction(open_action)
+
+        # Aggiungi l'azione per impostare la dimensione del crop
+        crop_icon = QIcon('icons/crop.svg')  # Aggiornato il nome dell'icona
+        crop_action = QAction(crop_icon, 'Imposta Dimensione Crop', self)
+        crop_action.setShortcut('Ctrl+Shift+C')  # Puoi scegliere un altro shortcut se preferisci
+        crop_action.triggered.connect(self.set_crop_size)
+        self.toolbar.addAction(crop_action)
+
+        # Aggiungi l'azione per modificare la cartella di destinazione
+        folder_icon = QIcon('icons/folder-edit-outline.svg')  # Assicurati che l'icona esista nella cartella 'icons'
+        folder_action = QAction(folder_icon, 'Modifica Cartella di Destinazione', self)
+        folder_action.setShortcut('Ctrl+D')  # Puoi scegliere un altro shortcut se preferisci
+        folder_action.triggered.connect(self.change_destination_folder)
+        self.toolbar.addAction(folder_action)
+
+    def set_crop_size(self):
+        # Apri un dialogo per impostare la dimensione del crop
+        crop_size, ok = QInputDialog.getInt(self, "Dimensione Crop", "Inserisci la dimensione del crop (in pixel):",
+                                            value=self.crop_size, min=10, max=1000)
+        if ok:
+            self.crop_size = crop_size
+            self.image_label.set_crop_size(crop_size)  # Aggiorna la dimensione del crop nell'etichetta dell'immagine
+
+    def change_destination_folder(self):
+        # Apri un dialogo per selezionare la nuova cartella di destinazione
+        new_folder = QFileDialog.getExistingDirectory(self, "Seleziona la nuova cartella di destinazione per i crop")
+        if new_folder:
+            self.crop_folder = new_folder
+            QMessageBox.information(self, "Cartella Aggiornata",
+                                    f"Cartella di destinazione aggiornata a:\n{self.crop_folder}")
+        else:
+            QMessageBox.warning(self, "Operazione Annullata", "La cartella di destinazione non è stata modificata.")
 
     def resizeEvent(self, event):
         """Adatta la dimensione dell'etichetta dell'immagine e del blocco quando la finestra viene ridimensionata"""
@@ -131,19 +165,13 @@ class ImageCropper(QMainWindow):
                 min(adjusted_height, available_height - 20))  # Mantieni un margine di 10px in alto e in basso
         else:
             available_height = self.height() - 250  # Considera gli altri elementi
-            self.image_label.setFixedHeight(available_height - 20)  # Se non c'è immagine caricata, imposta un'altezza di default
+            self.image_label.setFixedHeight(
+                available_height - 20)  # Se non c'è immagine caricata, imposta un'altezza di default
 
         # Aggiorna la dimensione del blocco in base alle dimensioni disponibili
         self.block_size = min(self.image_label.width(), self.image_label.height())
 
     def open_image(self):
-        # Imposta la dimensione del crop tramite un dialogo
-        crop_size, ok = QInputDialog.getInt(self, "Dimensione Crop", "Inserisci la dimensione del crop (in pixel):",
-                                            value=100, min=10, max=1000)
-        if ok:
-            self.crop_size = crop_size
-            self.image_label.set_crop_size(crop_size)  # Imposta la dimensione del crop nell'etichetta dell'immagine
-
         # Permetti all'utente di scegliere la cartella di destinazione
         self.crop_folder = QFileDialog.getExistingDirectory(self, "Seleziona la cartella di destinazione per i crop")
         if not self.crop_folder:
@@ -173,13 +201,6 @@ class ImageCropper(QMainWindow):
 
     def open_recent_file(self, image_path):
         self.image_path = image_path
-
-        # Imposta la dimensione del crop tramite un dialogo
-        crop_size, ok = QInputDialog.getInt(self, "Dimensione Crop", "Inserisci la dimensione del crop (in pixel):",
-                                            value=100, min=10, max=1000)
-        if ok:
-            self.crop_size = crop_size
-            self.image_label.set_crop_size(crop_size)  # Imposta la dimensione del crop nell'etichetta dell'immagine
 
         # Permetti all'utente di scegliere la cartella di destinazione
         self.crop_folder = QFileDialog.getExistingDirectory(self, "Seleziona la cartella di destinazione per i crop")
@@ -344,6 +365,10 @@ class ImageCropper(QMainWindow):
         self.crop_at_position(x_real, y_real)
 
     def crop_at_position(self, x, y):
+        if self.crop_folder is None:
+            QMessageBox.warning(self, "Errore", "Cartella di destinazione non impostata.")
+            return
+
         crop_half_size = self.crop_size // 2
         x_start = max(0, x - crop_half_size)
         y_start = max(0, y - crop_half_size)
@@ -408,9 +433,11 @@ class StartupDialog(QDialog):
             self.list_widget = QListWidget()
             for file_info in self.recent_files:
                 # file_info è un dizionario con 'path', 'open_time', 'save_time'
-                item = QListWidgetItem(QIcon('icons/image-outline.svg'), os.path.basename(file_info['path']))  # Icona SVG
+                item = QListWidgetItem(QIcon('icons/image-outline.svg'),
+                                       os.path.basename(file_info['path']))  # Icona SVG
                 item.setData(Qt.UserRole, file_info['path'])
-                item.setToolTip(f"Aperto: {file_info['open_time']}\nUltimo salvataggio: {file_info['save_time']}")
+                item.setToolTip(
+                    f"Aperto: {file_info['open_time']}\nUltimo salvataggio: {file_info['save_time']}")
                 self.list_widget.addItem(item)
             self.list_widget.itemClicked.connect(self.select_recent_file)
             layout.addWidget(self.list_widget)
@@ -431,27 +458,6 @@ class StartupDialog(QDialog):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-
-    # # Crea e visualizza lo splash screen
-    # splash_pix = QPixmap('logoImageCropper.jfif')
-    #
-    # # Ridimensiona l'immagine se supera 300x300 pixel
-    # max_size = 300
-    # screen_size = app.primaryScreen().size()
-    # if splash_pix.width() > max_size or splash_pix.height() > max_size:
-    #     splash_pix = splash_pix.scaled(max_size, max_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-    # elif splash_pix.width() > screen_size.width() or splash_pix.height() > screen_size.height():
-    #     splash_pix = splash_pix.scaled(screen_size.width(), screen_size.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-    #
-    # splash = QSplashScreen(splash_pix, Qt.WindowStaysOnTopHint)
-    # splash.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
-    # splash.show()
-    #
-    # # Centra lo splash screen sullo schermo
-    # rect = splash.geometry()
-    # center_point = app.primaryScreen().geometry().center()
-    # rect.moveCenter(center_point)
-    # splash.move(rect.topLeft())
 
     # Processa gli eventi
     app.processEvents()
@@ -483,5 +489,4 @@ if __name__ == "__main__":
         mainWin.show()
         mainWin.open_image()
 
-    # splash.finish(mainWin)
     sys.exit(app.exec_())
