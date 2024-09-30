@@ -20,6 +20,8 @@ class ImageLabel(QLabel):
         self.zoom_factor = 1.0
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setAlignment(Qt.AlignCenter)
+        self.displayed_pixmap_size = None
+        self.displayed_pixmap_offsets = None
 
     def set_crop_size(self, size):
         self.crop_size = size
@@ -27,6 +29,10 @@ class ImageLabel(QLabel):
     def set_zoom_factor(self, zoom):
         self.zoom_factor = zoom
         self.update()
+
+    def set_display_info(self, displayed_pixmap_size, displayed_pixmap_offsets):
+        self.displayed_pixmap_size = displayed_pixmap_size
+        self.displayed_pixmap_offsets = displayed_pixmap_offsets
 
     def mouseMoveEvent(self, event):
         # Update mouse position
@@ -40,26 +46,38 @@ class ImageLabel(QLabel):
 
     def paintEvent(self, event):
         super().paintEvent(event)
-        if self.mouse_pos and self.pixmap():
+        if self.mouse_pos and self.pixmap() and self.displayed_pixmap_size and self.displayed_pixmap_offsets:
             painter = QPainter(self)
             painter.setPen(QPen(QColor("yellow"), 2, Qt.SolidLine))
 
             x, y = self.mouse_pos.x(), self.mouse_pos.y()
 
-            # Calculate scale factors between pixmap and label
+            # Use stored displayed pixmap size and offsets
+            displayed_pixmap_width = self.displayed_pixmap_size.width()
+            displayed_pixmap_height = self.displayed_pixmap_size.height()
+            x_offset, y_offset = self.displayed_pixmap_offsets
+
+            # Get pixmap size
             pixmap_size = self.pixmap().size()
-            label_size = self.size()
-            scale_x = pixmap_size.width() / label_size.width()
-            scale_y = pixmap_size.height() / label_size.height()
 
-            # Adjust crop rectangle size according to the display scale
-            crop_width = self.crop_size * scale_x
-            crop_height = self.crop_size * scale_y
-            crop_half_width = crop_width / 2
-            crop_half_height = crop_height / 2
+            # Calculate scale factors from image coordinates to label coordinates
+            scale_x = displayed_pixmap_width / pixmap_size.width()
+            scale_y = displayed_pixmap_height / pixmap_size.height()
 
-            rect = QRectF(x - crop_half_width, y - crop_half_height, crop_width, crop_height)
-            painter.drawRect(rect)
+            # Adjust mouse position to account for the margins
+            x_in_pixmap = (x - x_offset) / scale_x
+            y_in_pixmap = (y - y_offset) / scale_y
+
+            # If the mouse is outside the pixmap area, do not draw the rectangle
+            if 0 <= x_in_pixmap <= pixmap_size.width() and 0 <= y_in_pixmap <= pixmap_size.height():
+                # Calculate crop rectangle size in label coordinates
+                crop_width = self.crop_size * scale_x
+                crop_height = self.crop_size * scale_y
+                crop_half_width = crop_width / 2
+                crop_half_height = crop_height / 2
+
+                rect = QRectF(x - crop_half_width, y - crop_half_height, crop_width, crop_height)
+                painter.drawRect(rect)
             painter.end()
 
 
@@ -82,6 +100,7 @@ class ImageCropper(QMainWindow):
         self.block_size = 800  # Initial block size
         self.image_size = None  # Size of the full image
         self.current_block = None  # Stores the currently displayed image block
+        self.full_image = None  # Stores the full image
 
         # Initialize settings and recent files
         self.settings = QSettings('YourCompany', 'ImageCropper')
@@ -208,11 +227,13 @@ class ImageCropper(QMainWindow):
                                                          options=options)
 
         if self.image_path:
-            # Get image size without loading it entirely into memory
-            self.image_size = self.get_image_size(self.image_path)
-            if self.image_size is None:
+            # Load the full image once
+            self.full_image = cv2.imread(self.image_path, cv2.IMREAD_COLOR)
+            if self.full_image is None:
                 QMessageBox.critical(self, "Error", "Unable to open the selected image.")
                 return
+
+            self.image_size = self.full_image.shape[:2]  # (height, width)
 
             # Reset offsets and zoom factor
             self.x_offset = 0
@@ -235,11 +256,13 @@ class ImageCropper(QMainWindow):
             QMessageBox.critical(self, "Error", "No folder selected for saving crops.")
             return
 
-        # Get image size without loading it entirely into memory
-        self.image_size = self.get_image_size(self.image_path)
-        if self.image_size is None:
+        # Load the full image once
+        self.full_image = cv2.imread(self.image_path, cv2.IMREAD_COLOR)
+        if self.full_image is None:
             QMessageBox.critical(self, "Error", "Unable to open the selected image.")
             return
+
+        self.image_size = self.full_image.shape[:2]  # (height, width)
 
         # Reset offsets and zoom factor
         self.x_offset = 0
@@ -273,15 +296,8 @@ class ImageCropper(QMainWindow):
         # Save in settings
         self.settings.setValue('recent_files', self.recent_files)
 
-    def get_image_size(self, image_path):
-        # Use OpenCV to get image size without loading it completely
-        img = cv2.imread(image_path, cv2.IMREAD_COLOR)
-        if img is not None:
-            return img.shape[:2]  # Returns (height, width)
-        return None
-
     def display_image(self):
-        if self.image_path is None:
+        if self.image_path is None or self.full_image is None:
             return
 
         # Get the size of the image_label in pixels
@@ -293,18 +309,16 @@ class ImageCropper(QMainWindow):
         display_height = int(label_height / self.zoom_factor)
 
         # Ensure the display area does not exceed the image size
-        if display_width > self.image_size[1]:
-            display_width = self.image_size[1]
-        if display_height > self.image_size[0]:
-            display_height = self.image_size[0]
+        display_width = min(display_width, self.image_size[1])
+        display_height = min(display_height, self.image_size[0])
 
         # Adjust offsets if necessary
         self.x_offset = max(0, min(self.x_offset, self.image_size[1] - display_width))
         self.y_offset = max(0, min(self.y_offset, self.image_size[0] - display_height))
 
-        # Load the required area from the image
-        img = cv2.imread(self.image_path, cv2.IMREAD_COLOR)
-        img = img[self.y_offset:self.y_offset+display_height, self.x_offset:self.x_offset+display_width]
+        # Extract the required area from the image
+        img = self.full_image[self.y_offset:self.y_offset + display_height,
+                              self.x_offset:self.x_offset + display_width]
 
         if img is None or img.size == 0:
             return
@@ -319,19 +333,29 @@ class ImageCropper(QMainWindow):
 
         # Scale the QImage according to the zoom factor
         pixmap = QPixmap.fromImage(qimg)
-        scaled_pixmap = pixmap.scaled(label_width, label_height, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+        scaled_pixmap = pixmap.scaled(label_width, label_height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+        # Store the displayed pixmap size and offsets
+        displayed_pixmap_width = scaled_pixmap.width()
+        displayed_pixmap_height = scaled_pixmap.height()
+
+        # Calculate margins (offsets)
+        x_offset = (label_width - displayed_pixmap_width) / 2
+        y_offset = (label_height - displayed_pixmap_height) / 2
+
+        # Set display info in the image label
+        self.image_label.set_display_info(QSize(displayed_pixmap_width, displayed_pixmap_height), (x_offset, y_offset))
 
         # Set the pixmap to the image_label
         self.image_label.setPixmap(scaled_pixmap)
         self.update_mini_map()
 
     def update_mini_map(self):
-        if self.image_path is None:
+        if self.image_path is None or self.full_image is None:
             return
 
-        # Load the full image and create a thumbnail for the mini-map
-        img = cv2.imread(self.image_path, cv2.IMREAD_COLOR)
-        thumb = cv2.resize(img, (300, 300))
+        # Create a thumbnail for the mini-map
+        thumb = cv2.resize(self.full_image, (300, 300))
         thumb = cv2.cvtColor(thumb, cv2.COLOR_BGR2RGB)
 
         qthumb = QImage(thumb.data, thumb.shape[1], thumb.shape[0], thumb.strides[0], QImage.Format_RGB888)
@@ -406,15 +430,25 @@ class ImageCropper(QMainWindow):
         self.display_image()  # Update the image display after moving
 
     def handle_mouse_click(self, x, y):
-        if self.image_label.pixmap():
-            # Calculate the real position of the click relative to the full image
-            pixmap_size = self.image_label.pixmap().size()
-            label_size = self.image_label.size()
-            scale_x = pixmap_size.width() / label_size.width()
-            scale_y = pixmap_size.height() / label_size.height()
+        if self.image_label.pixmap() and self.image_label.displayed_pixmap_size and self.image_label.displayed_pixmap_offsets:
+            # Use stored displayed pixmap size and offsets
+            displayed_pixmap_width = self.image_label.displayed_pixmap_size.width()
+            displayed_pixmap_height = self.image_label.displayed_pixmap_size.height()
+            x_offset, y_offset = self.image_label.displayed_pixmap_offsets
 
-            x_real = self.x_offset + int(x * scale_x)
-            y_real = self.y_offset + int(y * scale_y)
+            pixmap_size = self.image_label.pixmap().size()
+
+            # Calculate scale factors from label coordinates to image coordinates
+            scale_x = pixmap_size.width() / displayed_pixmap_width
+            scale_y = pixmap_size.height() / displayed_pixmap_height
+
+            # Adjust mouse position to account for the margins
+            x_in_pixmap = (x - x_offset) * scale_x
+            y_in_pixmap = (y - y_offset) * scale_y
+
+            # Calculate the real position in the image
+            x_real = self.x_offset + int(x_in_pixmap)
+            y_real = self.y_offset + int(y_in_pixmap)
             self.crop_at_position(x_real, y_real)
 
     def crop_at_position(self, x, y):
@@ -432,11 +466,11 @@ class ImageCropper(QMainWindow):
         crop_width = x_end - x_start
         crop_height = y_end - y_start
 
-        # Load the crop area
-        img = cv2.imread(self.image_path, cv2.IMREAD_COLOR)
-        crop = img[y_start:y_end, x_start:x_end]
+        # Extract the crop area from the stored full image
+        crop = self.full_image[y_start:y_end, x_start:x_end]
 
         if crop is None or crop.size == 0:
+            QMessageBox.warning(self, "Error", "Unable to extract the crop.")
             return
 
         base_name = os.path.basename(self.image_path)
@@ -445,6 +479,7 @@ class ImageCropper(QMainWindow):
         crop_name = f"{name}_crop_{x}_{y}.png"
         crop_path = os.path.join(self.crop_folder, crop_name)
 
+        # Save the crop in BGR format
         cv2.imwrite(crop_path, crop)
 
         # Update save time in recent files
