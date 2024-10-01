@@ -58,7 +58,7 @@ class ImageLabel(QLabel):
         if self.mouse_pos and self.pixmap() and self.scale_x and self.scale_y:
             painter = QPainter(self)
             painter.setPen(QPen(QColor("yellow"), 2, Qt.SolidLine))
-            # todo add crop size
+            # todo fix problem with crop size and zoom
 
             label_x = self.mouse_pos.x()
             label_y = self.mouse_pos.y()
@@ -90,6 +90,10 @@ class ImageLabel(QLabel):
 
                 rect = QRectF(label_x_start, label_y_start, label_x_end - label_x_start, label_y_end - label_y_start)
                 painter.drawRect(rect)
+
+                # Draw the crop size inside the yellow square
+                painter.drawText(rect, Qt.AlignRight, str(self.crop_size)+"x"+str(self.crop_size)+"px ")
+
             painter.end()
 
 
