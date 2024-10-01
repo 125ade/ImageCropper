@@ -58,6 +58,7 @@ class ImageLabel(QLabel):
         if self.mouse_pos and self.pixmap() and self.scale_x and self.scale_y:
             painter = QPainter(self)
             painter.setPen(QPen(QColor("yellow"), 2, Qt.SolidLine))
+            # todo add crop size
 
             label_x = self.mouse_pos.x()
             label_y = self.mouse_pos.y()
