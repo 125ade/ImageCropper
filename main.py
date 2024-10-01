@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QVBoxLayout, QHBoxLayout, QWidget, \
     QPushButton, QGraphicsView, QGraphicsScene, QMessageBox, QInputDialog, QToolBar, QAction, QDialog, QListWidget, \
-    QListWidgetItem, QSizePolicy
+    QListWidgetItem, QSizePolicy, QToolBox, QTextEdit
 from PyQt5.QtCore import Qt, QRectF, pyqtSignal, QSettings, QSize
 from PyQt5.QtGui import QImage, QPixmap, QPen, QColor, QPainter, QIcon
 
@@ -202,6 +202,84 @@ class ImageCropper(QMainWindow):
         zoom_out_action.setShortcut('Ctrl+-')
         zoom_out_action.triggered.connect(self.zoom_out)
         self.toolbar.addAction(zoom_out_action)
+
+        # Add information action to the rightmost position
+        self.toolbar.addSeparator()
+        info_icon = QIcon('icons/information-outline.svg')
+        info_action = QAction(info_icon, 'Information', self)
+        info_action.triggered.connect(self.show_information)
+        self.toolbar.addAction(info_action)
+
+    def show_information(self):
+        # Create and display the information dialog
+        info_dialog = QDialog(self)
+        info_dialog.setWindowTitle('Information')
+        info_dialog.setWindowIcon(QIcon('icons/information-outline.svg'))
+        info_dialog.resize(600, 400)
+
+        layout = QVBoxLayout(info_dialog)
+
+        # Use QToolBox for collapsible sections
+        toolbox = QToolBox()
+        layout.addWidget(toolbox)
+
+        # Features section
+        features_text = """
+        <ul>
+            <li>Open images and navigate through them.</li>
+            <li>Crop specific areas of images by clicking on them.</li>
+            <li>Zoom in and out to focus on details.</li>
+            <li>View a mini-map of the entire image for easy navigation.</li>
+            <li>Save cropped areas to a specified folder.</li>
+        </ul>
+        """
+        features_widget = QWidget()
+        features_layout = QVBoxLayout()
+        features_label = QLabel(features_text)
+        features_label.setWordWrap(True)
+        features_layout.addWidget(features_label)
+        features_widget.setLayout(features_layout)
+        toolbox.addItem(features_widget, 'Features')
+
+        # Shortcuts section
+        shortcuts_text = """
+        <ul>
+            <li><b>Ctrl+O</b>: Open Image</li>
+            <li><b>Ctrl+Shift+C</b>: Set Crop Size</li>
+            <li><b>Ctrl+D</b>: Change Destination Folder</li>
+            <li><b>Ctrl++</b>: Zoom In</li>
+            <li><b>Ctrl+-</b>: Zoom Out</li>
+            <li><b>Arrow Keys</b>: Move Image View</li>
+            <li><b>Ctrl + Arrow Keys</b>: Move Image View Faster</li>
+        </ul>
+        """
+        shortcuts_widget = QWidget()
+        shortcuts_layout = QVBoxLayout()
+        shortcuts_label = QLabel(shortcuts_text)
+        shortcuts_label.setWordWrap(True)
+        shortcuts_layout.addWidget(shortcuts_label)
+        shortcuts_widget.setLayout(shortcuts_layout)
+        toolbox.addItem(shortcuts_widget, 'Shortcuts')
+
+        # Tools section
+        tools_text = """
+        <ul>
+            <li><b>Open Image</b>: Load a new image to work with.</li>
+            <li><b>Set Crop Size</b>: Define the size of the area to crop.</li>
+            <li><b>Change Destination Folder</b>: Set where cropped images are saved.</li>
+            <li><b>Zoom In/Out</b>: Adjust the zoom level of the image view.</li>
+            <li><b>Information</b>: View application commands and functionalities.</li>
+        </ul>
+        """
+        tools_widget = QWidget()
+        tools_layout = QVBoxLayout()
+        tools_label = QLabel(tools_text)
+        tools_label.setWordWrap(True)
+        tools_layout.addWidget(tools_label)
+        tools_widget.setLayout(tools_layout)
+        toolbox.addItem(tools_widget, 'Tools')
+
+        info_dialog.exec_()
 
     def set_crop_size(self):
         # Open a dialog to set the crop size
