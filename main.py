@@ -250,11 +250,32 @@ class ImageCropper(QMainWindow):
     def open_recent_file(self, image_path):
         self.image_path = image_path
 
-        # Allow the user to select the destination folder
-        self.crop_folder = QFileDialog.getExistingDirectory(self, "Select the destination folder for crops")
-        if not self.crop_folder:
-            QMessageBox.critical(self, "Error", "No folder selected for saving crops.")
-            return
+        # Find the crop_folder associated with this image
+        previous_crop_folder = None
+        for file_info in self.recent_files:
+            if file_info['path'] == image_path:
+                previous_crop_folder = file_info.get('crop_folder')
+                break
+
+        if previous_crop_folder:
+            # Ask the user whether to use the previous crop folder or select a new one
+            reply = QMessageBox.question(self, 'Select Crop Folder',
+                                         f"Do you want to use the previous destination folder for crops?\n{previous_crop_folder}",
+                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            if reply == QMessageBox.Yes:
+                self.crop_folder = previous_crop_folder
+            else:
+                # Allow the user to select the destination folder
+                self.crop_folder = QFileDialog.getExistingDirectory(self, "Select the destination folder for crops")
+                if not self.crop_folder:
+                    QMessageBox.critical(self, "Error", "No folder selected for saving crops.")
+                    return
+        else:
+            # No previous crop folder, ask the user to select one
+            self.crop_folder = QFileDialog.getExistingDirectory(self, "Select the destination folder for crops")
+            if not self.crop_folder:
+                QMessageBox.critical(self, "Error", "No folder selected for saving crops.")
+                return
 
         # Load the full image once
         self.full_image = cv2.imread(self.image_path, cv2.IMREAD_COLOR)
@@ -286,7 +307,8 @@ class ImageCropper(QMainWindow):
         file_info = {
             'path': image_path,
             'open_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'save_time': 'N/A'  # Update when saving
+            'save_time': 'N/A',  # Update when saving
+            'crop_folder': self.crop_folder  # Store the crop folder used
         }
         self.recent_files.insert(0, file_info)
 
@@ -482,11 +504,12 @@ class ImageCropper(QMainWindow):
         # Save the crop in BGR format
         cv2.imwrite(crop_path, crop)
 
-        # Update save time in recent files
+        # Update save time and crop folder in recent files
         from datetime import datetime
         for file_info in self.recent_files:
             if file_info['path'] == self.image_path:
                 file_info['save_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                file_info['crop_folder'] = self.crop_folder  # Update crop_folder
                 break
         # Save in settings
         self.settings.setValue('recent_files', self.recent_files)
@@ -575,17 +598,17 @@ if __name__ == "__main__":
         if startup_dialog.exec_() == QDialog.Accepted:
             if startup_dialog.selected_file == 'new':
                 # Open a new image
-                mainWin.show()
+                mainWin.showMaximized()
                 mainWin.open_image()
             else:
                 # Open recent image
-                mainWin.show()
+                mainWin.showMaximized()
                 mainWin.open_recent_file(startup_dialog.selected_file)
         else:
             sys.exit()  # User cancelled, exit the application
     else:
         # No recent files, proceed to open a new image
-        mainWin.show()
+        mainWin.showMaximized()
         mainWin.open_image()
 
     sys.exit(app.exec_())
