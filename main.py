@@ -92,7 +92,7 @@ class ImageLabel(QLabel):
                 painter.drawRect(rect)
 
                 # Draw the crop size inside the yellow square
-                painter.drawText(rect, Qt.AlignRight, str(self.crop_size)+"x"+str(self.crop_size)+"px ")
+                painter.drawText(rect, Qt.AlignRight, str(self.crop_size)+"px ")
 
             painter.end()
 
@@ -169,7 +169,7 @@ class ImageCropper(QMainWindow):
 
     def create_actions(self):
         # Create actions for the toolbar
-        open_icon = QIcon('icons/file-edit-outline.svg')  # Use SVG icon for opening
+        open_icon = QIcon('icons/image-plus-outline.svg')  # Use SVG icon for opening
         open_action = QAction(open_icon, 'Open Image', self)
         open_action.setShortcut('Ctrl+O')
         open_action.triggered.connect(self.open_image)
@@ -652,14 +652,13 @@ class StartupDialog(QDialog):
 
         # Add "Open a new image" button in the center
         open_new_button = QPushButton('Open a new image')
-        open_new_button.setIcon(QIcon('icons/open.svg'))  # Use SVG icon
-        open_new_button.setIconSize(QSize(32, 32))
+        open_new_button.setIcon(QIcon('icons/image-plus-outline.svg'))
         open_new_button.clicked.connect(self.open_new_image)
         layout.addWidget(open_new_button)
 
         # If there are recent files, show them in a list
         if self.recent_files:
-            recent_label = QLabel('Recent images:')
+            recent_label = QLabel()
             layout.addWidget(recent_label)
 
             self.list_widget = QListWidget()
@@ -673,6 +672,12 @@ class StartupDialog(QDialog):
                 self.list_widget.addItem(item)
             self.list_widget.itemClicked.connect(self.select_recent_file)
             layout.addWidget(self.list_widget)
+
+            # Add the "Clear History" button
+            clear_history_button = QPushButton('Clear History')
+            clear_history_button.setIcon(QIcon('icons/delete-sweep-outline.svg'))
+            clear_history_button.clicked.connect(self.clear_history)
+            layout.addWidget(clear_history_button)
         else:
             no_recent_label = QLabel('No recent images.')
             layout.addWidget(no_recent_label)
@@ -686,6 +691,22 @@ class StartupDialog(QDialog):
     def select_recent_file(self, item):
         self.selected_file = item.data(Qt.UserRole)
         self.accept()
+
+    def clear_history(self):
+        reply = QMessageBox.question(self, 'Clear History',
+                                     'Are you sure you want to clear the recent images history?',
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.recent_files.clear()
+            # Update the settings to clear the stored recent files
+            settings = QSettings('YourCompany', 'ImageCropper')
+            settings.setValue('recent_files', self.recent_files)
+            # Remove the list widget from the layout
+            self.list_widget.clear()
+            # Optionally, hide the list widget and the clear history button
+            self.list_widget.hide()
+            self.sender().hide()  # Hide the button that called this method
+            QMessageBox.information(self, 'History Cleared', 'Recent images history has been cleared.')
 
 
 if __name__ == "__main__":
