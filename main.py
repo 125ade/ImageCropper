@@ -126,6 +126,9 @@ class ImageCropper(QMainWindow):
         self.x_offset_image = None
         self.y_offset_image = None
 
+        # Filter settings
+        self.grayscale_filter = False  # Initialize the grayscale filter flag to False
+
         # Initialize settings and recent files
         self.settings = QSettings('YourCompany', 'ImageCropper')
         self.recent_files = self.settings.value('recent_files', [], type=list)
@@ -207,6 +210,13 @@ class ImageCropper(QMainWindow):
         zoom_out_action.setShortcut('Ctrl+-')
         zoom_out_action.triggered.connect(self.zoom_out)
         self.toolbar.addAction(zoom_out_action)
+
+        # Add filter action to the toolbar
+        filter_icon = QIcon('icons/filter-menu-outline.svg')  # Use the filter icon
+        self.toolbar_filter_action = QAction(filter_icon, 'Apply Filters', self)
+        self.toolbar_filter_action.setShortcut('Ctrl+F')
+        self.toolbar_filter_action.triggered.connect(self.open_filter_dialog)
+        self.toolbar.addAction(self.toolbar_filter_action)
 
         # Add information action to the rightmost position
         self.toolbar.addSeparator()
@@ -315,6 +325,18 @@ class ImageCropper(QMainWindow):
         self.image_label.set_zoom_factor(self.zoom_factor)
         self.zoom_label.setText(f"{int(self.zoom_factor * 100)}%")
         self.display_image()
+
+    def open_filter_dialog(self):
+        filter_dialog = FilterDialog(self, grayscale_selected=self.grayscale_filter)
+        if filter_dialog.exec_() == QDialog.Accepted:
+            # Update the filter status based on the selection
+            self.grayscale_filter = filter_dialog.grayscale_selected
+
+            # Change the toolbar icon color to green if any filter is active
+            if self.grayscale_filter:
+                self.toolbar_filter_action.setIcon(QIcon('icons/filter-check-outline.svg'))
+            else:
+                self.toolbar_filter_action.setIcon(QIcon('icons/filter-menu-outline.svg'))
 
     def open_image(self):
         # Allow the user to select the destination folder
@@ -605,6 +627,10 @@ class ImageCropper(QMainWindow):
             QMessageBox.warning(self, "Error", "Unable to extract the crop.")
             return
 
+        # Apply grayscale filter if selected
+        if self.grayscale_filter:
+            crop = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
+
         base_name = os.path.basename(self.image_path)
         name, ext = os.path.splitext(base_name)
 
@@ -630,6 +656,51 @@ class ImageCropper(QMainWindow):
         """Adjusts the image display when the window is resized"""
         self.display_image()
         super().resizeEvent(event)
+
+
+class FilterDialog(QDialog):
+    def __init__(self, parent=None, grayscale_selected=False):
+        super().__init__(parent)
+        self.setWindowTitle("Select Filters")
+        self.setWindowIcon(QIcon('icons/filter-menu-outline.svg'))
+        self.setFixedSize(300, 400)
+
+        # Layout for the filters
+        layout = QVBoxLayout(self)
+
+        # Add the grayscale filter option
+        self.grayscale_selected = grayscale_selected  # Track if the filter is selected
+
+        self.grayscale_button = QPushButton()
+        self.grayscale_button.setIcon(QIcon('icons/filter-outline.svg'))
+        self.grayscale_button.setIconSize(QSize(32, 32))
+        self.grayscale_button.setToolTip('Grayscale')
+        self.grayscale_button.setStyleSheet("text-align: left; color: black; font-size: 16px;")
+        self.grayscale_button.setText(" Grayscale")  # Name of the filter
+        self.grayscale_button.setCheckable(True)  # Allow it to be checked
+        self.grayscale_button.clicked.connect(self.toggle_grayscale_filter)
+
+        # If grayscale is already selected, show the green checkmark and change the color to green
+        if self.grayscale_selected:
+            self.grayscale_button.setIcon(QIcon('icons/filter-check-outline.svg'))
+            self.grayscale_button.setStyleSheet("text-align: left; color: green; font-size: 16px;")
+
+        layout.addWidget(self.grayscale_button)
+
+        # Add a button to confirm selection
+        self.ok_button = QPushButton("OK")
+        self.ok_button.clicked.connect(self.accept)
+        layout.addWidget(self.ok_button)
+
+    def toggle_grayscale_filter(self):
+        """Toggle the grayscale filter selection."""
+        self.grayscale_selected = not self.grayscale_selected
+        if self.grayscale_selected:
+            self.grayscale_button.setIcon(QIcon('icons/filter-check-outline.svg'))  # Set the selected icon
+            self.grayscale_button.setStyleSheet("text-align: left; color: green; font-size: 16px;")  # Change color
+        else:
+            self.grayscale_button.setIcon(QIcon('icons/filter-outline.svg'))  # Set the unselected icon
+            self.grayscale_button.setStyleSheet("text-align: left; color: black; font-size: 16px;")  # Reset color
 
 
 class StartupDialog(QDialog):
