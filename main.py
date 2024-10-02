@@ -2,9 +2,12 @@ import sys
 import os
 import cv2
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QVBoxLayout, QHBoxLayout, QWidget, \
-    QPushButton, QGraphicsView, QGraphicsScene, QMessageBox, QInputDialog, QToolBar, QAction, QDialog, QListWidget, \
-    QListWidgetItem, QSizePolicy, QToolBox, QTextEdit
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QLabel, QFileDialog, QVBoxLayout, QHBoxLayout, QWidget,
+    QPushButton, QGraphicsView, QGraphicsScene, QMessageBox, QInputDialog, QToolBar, QAction,
+    QDialog, QListWidget, QListWidgetItem, QSizePolicy, QToolBox, QTextEdit, QLineEdit,
+    QAbstractItemView  # Added missing import
+)
 from PyQt5.QtCore import Qt, QRectF, pyqtSignal, QSettings, QSize
 from PyQt5.QtGui import QImage, QPixmap, QPen, QColor, QPainter, QIcon
 
@@ -35,7 +38,8 @@ class ImageLabel(QLabel):
         self.zoom_factor = zoom
         self.update()
 
-    def set_transformation_params(self, scale_x, scale_y, x_offset_label, y_offset_label, x_offset_image, y_offset_image):
+    def set_transformation_params(self, scale_x, scale_y, x_offset_label, y_offset_label, x_offset_image,
+                                  y_offset_image):
         self.scale_x = scale_x
         self.scale_y = scale_y
         self.x_offset_label = x_offset_label
@@ -58,7 +62,6 @@ class ImageLabel(QLabel):
         if self.mouse_pos and self.pixmap() and self.scale_x and self.scale_y:
             painter = QPainter(self)
             painter.setPen(QPen(QColor("yellow"), 2, Qt.SolidLine))
-            # todo fix problem with crop size and zoom
 
             label_x = self.mouse_pos.x()
             label_y = self.mouse_pos.y()
@@ -92,9 +95,34 @@ class ImageLabel(QLabel):
                 painter.drawRect(rect)
 
                 # Draw the crop size inside the yellow square
-                painter.drawText(rect, Qt.AlignRight, str(self.crop_size)+"px ")
+                painter.drawText(rect, Qt.AlignRight, str(self.crop_size) + "px ")
 
             painter.end()
+
+
+class Filter:
+    def __init__(self, name):
+        self.name = name
+
+    def apply(self, image):
+        # Override this method in subclasses
+        return image
+
+
+class GrayscaleFilter(Filter):
+    def __init__(self):
+        super().__init__('Grayscale')
+
+    def apply(self, image):
+        return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+
+class BlurFilter(Filter):
+    def __init__(self):
+        super().__init__('Blur')
+
+    def apply(self, image):
+        return cv2.GaussianBlur(image, (5, 5), 0)
 
 
 class ImageCropper(QMainWindow):
@@ -127,7 +155,7 @@ class ImageCropper(QMainWindow):
         self.y_offset_image = None
 
         # Filter settings
-        self.grayscale_filter = False  # Initialize the grayscale filter flag to False
+        self.selected_filters = []  # List of selected filters
 
         # Initialize settings and recent files
         self.settings = QSettings('YourCompany', 'ImageCropper')
@@ -327,13 +355,13 @@ class ImageCropper(QMainWindow):
         self.display_image()
 
     def open_filter_dialog(self):
-        filter_dialog = FilterDialog(self, grayscale_selected=self.grayscale_filter)
+        filter_dialog = FilterDialog(self, selected_filters=self.selected_filters)
         if filter_dialog.exec_() == QDialog.Accepted:
-            # Update the filter status based on the selection
-            self.grayscale_filter = filter_dialog.grayscale_selected
+            # Update the selected filters
+            self.selected_filters = filter_dialog.get_selected_filters()
 
             # Change the toolbar icon color to green if any filter is active
-            if self.grayscale_filter:
+            if self.selected_filters:
                 self.toolbar_filter_action.setIcon(QIcon('icons/filter-check-outline.svg'))
             else:
                 self.toolbar_filter_action.setIcon(QIcon('icons/filter-menu-outline.svg'))
@@ -627,9 +655,9 @@ class ImageCropper(QMainWindow):
             QMessageBox.warning(self, "Error", "Unable to extract the crop.")
             return
 
-        # Apply grayscale filter if selected
-        if self.grayscale_filter:
-            crop = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
+        # Apply filters in order
+        for filter in self.selected_filters:
+            crop = filter.apply(crop)
 
         base_name = os.path.basename(self.image_path)
         name, ext = os.path.splitext(base_name)
@@ -637,8 +665,13 @@ class ImageCropper(QMainWindow):
         crop_name = f"{name}_crop_{x}_{y}.png"
         crop_path = os.path.join(self.crop_folder, crop_name)
 
-        # Save the crop in BGR format
-        cv2.imwrite(crop_path, crop)
+        # Save the crop
+        if len(crop.shape) == 2:
+            # Grayscale image
+            cv2.imwrite(crop_path, crop)
+        else:
+            # Color image
+            cv2.imwrite(crop_path, cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
 
         # Update save time and crop folder in recent files
         from datetime import datetime
@@ -659,48 +692,179 @@ class ImageCropper(QMainWindow):
 
 
 class FilterDialog(QDialog):
-    def __init__(self, parent=None, grayscale_selected=False):
+    def __init__(self, parent=None, selected_filters=None):
         super().__init__(parent)
         self.setWindowTitle("Select Filters")
         self.setWindowIcon(QIcon('icons/filter-menu-outline.svg'))
-        self.setFixedSize(300, 400)
+        self.setFixedSize(500, 500)
 
-        # Layout for the filters
+        # If selected_filters is None, initialize as empty list
+        if selected_filters is None:
+            selected_filters = []
+
+        self.available_filters = [
+            GrayscaleFilter(),
+            BlurFilter(),
+            # Add more default filters
+        ]
+
+        # Create the layout
         layout = QVBoxLayout(self)
 
-        # Add the grayscale filter option
-        self.grayscale_selected = grayscale_selected  # Track if the filter is selected
+        # Create the list of available filters
+        self.available_list_widget = QListWidget()
+        self.available_list_widget.setSelectionMode(QAbstractItemView.SingleSelection)
+        for filter in self.available_filters:
+            item = QListWidgetItem(filter.name)
+            item.setData(Qt.UserRole, filter)
+            self.available_list_widget.addItem(item)
 
-        self.grayscale_button = QPushButton()
-        self.grayscale_button.setIcon(QIcon('icons/filter-outline.svg'))
-        self.grayscale_button.setIconSize(QSize(32, 32))
-        self.grayscale_button.setToolTip('Grayscale')
-        self.grayscale_button.setStyleSheet("text-align: left; color: black; font-size: 16px;")
-        self.grayscale_button.setText(" Grayscale")  # Name of the filter
-        self.grayscale_button.setCheckable(True)  # Allow it to be checked
-        self.grayscale_button.clicked.connect(self.toggle_grayscale_filter)
+        # Create the list of selected filters
+        self.selected_list_widget = QListWidget()
+        self.selected_list_widget.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        for filter in selected_filters:
+            item = QListWidgetItem(filter.name)
+            item.setData(Qt.UserRole, filter)
+            self.selected_list_widget.addItem(item)
 
-        # If grayscale is already selected, show the green checkmark and change the color to green
-        if self.grayscale_selected:
-            self.grayscale_button.setIcon(QIcon('icons/filter-check-outline.svg'))
-            self.grayscale_button.setStyleSheet("text-align: left; color: green; font-size: 16px;")
+        # Allow drag and drop to reorder selected filters
+        self.selected_list_widget.setDragDropMode(QAbstractItemView.InternalMove)
+        self.selected_list_widget.setDefaultDropAction(Qt.MoveAction)
 
-        layout.addWidget(self.grayscale_button)
+        # Create buttons to add/remove filters
+        add_button = QPushButton("Add ->")
+        remove_button = QPushButton("<- Remove")
+        new_filter_button = QPushButton("New Filter")
 
-        # Add a button to confirm selection
+        add_button.clicked.connect(self.add_filter)
+        remove_button.clicked.connect(self.remove_filter)
+        new_filter_button.clicked.connect(self.add_new_filter)
+
+        # Create layouts
+        lists_layout = QHBoxLayout()
+        lists_layout.addWidget(QLabel("Available Filters"))
+        lists_layout.addWidget(QLabel("Selected Filters"))
+
+        filters_layout = QHBoxLayout()
+        filters_layout.addWidget(self.available_list_widget)
+        buttons_layout = QVBoxLayout()
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(add_button)
+        buttons_layout.addWidget(remove_button)
+        buttons_layout.addWidget(new_filter_button)
+        buttons_layout.addStretch()
+        filters_layout.addLayout(buttons_layout)
+        filters_layout.addWidget(self.selected_list_widget)
+
+        layout.addLayout(lists_layout)
+        layout.addLayout(filters_layout)
+
+        # OK and Cancel buttons
+        ok_button = QPushButton("OK")
+        ok_button.clicked.connect(self.accept)
+        cancel_button = QPushButton("Cancel")
+        cancel_button.clicked.connect(self.reject)
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(ok_button)
+        buttons_layout.addWidget(cancel_button)
+        layout.addLayout(buttons_layout)
+
+    def add_filter(self):
+        selected_items = self.available_list_widget.selectedItems()
+        if selected_items:
+            item = selected_items[0]
+            filter = item.data(Qt.UserRole)
+            # Add filter to selected filters list
+            new_item = QListWidgetItem(filter.name)
+            new_item.setData(Qt.UserRole, filter)
+            self.selected_list_widget.addItem(new_item)
+
+    def remove_filter(self):
+        selected_items = self.selected_list_widget.selectedItems()
+        for item in selected_items:
+            row = self.selected_list_widget.row(item)
+            self.selected_list_widget.takeItem(row)
+
+    def add_new_filter(self):
+        # Open a dialog to input code
+        code_dialog = CodeSnippetDialog(self)
+        if code_dialog.exec_() == QDialog.Accepted:
+            # Get the code and filter name
+            filter_name, code = code_dialog.get_code()
+            # Create a new filter
+            try:
+                new_filter = self.create_filter_from_code(filter_name, code)
+                self.available_filters.append(new_filter)
+                # Add to available filters list
+                item = QListWidgetItem(new_filter.name)
+                item.setData(Qt.UserRole, new_filter)
+                self.available_list_widget.addItem(item)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to create filter:\n{e}")
+
+    def create_filter_from_code(self, name, code):
+        # Define a local dictionary for the code execution
+        local_dict = {}
+        exec(code, {'np': np, 'cv2': cv2}, local_dict)
+        # The code should define an 'apply' function
+        if 'apply' not in local_dict:
+            raise ValueError("Code must define an 'apply' function")
+        apply_func = local_dict['apply']
+        # Create a new Filter subclass
+        class CustomFilter(Filter):
+            def __init__(self):
+                super().__init__(name)
+
+            def apply(self, image):
+                return apply_func(image)
+        return CustomFilter()
+
+    def get_selected_filters(self):
+        filters = []
+        for index in range(self.selected_list_widget.count()):
+            item = self.selected_list_widget.item(index)
+            filter = item.data(Qt.UserRole)
+            filters.append(filter)
+        return filters
+
+
+class CodeSnippetDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("New Filter")
+        self.setWindowIcon(QIcon('icons/code-tags.svg'))
+        self.resize(500, 400)
+
+        layout = QVBoxLayout(self)
+
+        self.name_edit = QLineEdit()
+        self.name_edit.setPlaceholderText("Filter Name")
+        layout.addWidget(self.name_edit)
+
+        self.code_edit = QTextEdit()
+        self.code_edit.setPlainText("""def apply(image):
+    # image is a NumPy array (OpenCV image)
+    # Modify and return the image
+    return image
+""")
+        layout.addWidget(self.code_edit)
+
+        # Buttons
+        button_layout = QHBoxLayout()
         self.ok_button = QPushButton("OK")
         self.ok_button.clicked.connect(self.accept)
-        layout.addWidget(self.ok_button)
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.clicked.connect(self.reject)
+        button_layout.addStretch()
+        button_layout.addWidget(self.ok_button)
+        button_layout.addWidget(self.cancel_button)
+        layout.addLayout(button_layout)
 
-    def toggle_grayscale_filter(self):
-        """Toggle the grayscale filter selection."""
-        self.grayscale_selected = not self.grayscale_selected
-        if self.grayscale_selected:
-            self.grayscale_button.setIcon(QIcon('icons/filter-check-outline.svg'))  # Set the selected icon
-            self.grayscale_button.setStyleSheet("text-align: left; color: green; font-size: 16px;")  # Change color
-        else:
-            self.grayscale_button.setIcon(QIcon('icons/filter-outline.svg'))  # Set the unselected icon
-            self.grayscale_button.setStyleSheet("text-align: left; color: black; font-size: 16px;")  # Reset color
+    def get_code(self):
+        name = self.name_edit.text()
+        code = self.code_edit.toPlainText()
+        return name, code
 
 
 class StartupDialog(QDialog):
