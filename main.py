@@ -914,11 +914,16 @@ class FilterDialog(QDialog):
         # Allow drag and drop to reorder selected filters
         self.selected_list_widget.setDragDropMode(QAbstractItemView.InternalMove)
         self.selected_list_widget.setDefaultDropAction(Qt.MoveAction)
-
         # Create buttons to add/remove filters
-        add_button = QPushButton("Add ->")
-        remove_button = QPushButton("<- Remove")
-        new_filter_button = QPushButton("New Filter")
+        add_button = QPushButton()
+        add_button.setIcon(QIcon("icons/arrow-right-bold-box-outline.svg"))
+        add_button.setIconSize(QSize(24, 24))
+        remove_button = QPushButton()
+        remove_button.setIcon(QIcon("icons/arrow-left-bold-box-outline.svg"))
+        remove_button.setIconSize(QSize(24, 24))
+        new_filter_button = QPushButton()
+        new_filter_button.setIcon(QIcon("icons/language-python.svg"))
+        new_filter_button.setIconSize(QSize(24, 24))
 
         add_button.clicked.connect(self.add_filter)
         remove_button.clicked.connect(self.remove_filter)
@@ -927,6 +932,7 @@ class FilterDialog(QDialog):
         # Create layouts
         lists_layout = QHBoxLayout()
         lists_layout.addWidget(QLabel("Available Filters"))
+        lists_layout.addStretch()
         lists_layout.addWidget(QLabel("Selected Filters"))
 
         filters_layout = QHBoxLayout()
@@ -1023,7 +1029,7 @@ class CodeSnippetDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("New Filter")
-        self.setWindowIcon(QIcon('icons/code-tags.svg'))
+        self.setWindowIcon(QIcon('icons/filter-plus-outline.svg'))
         self.resize(500, 400)
 
         layout = QVBoxLayout(self)
@@ -1085,9 +1091,6 @@ class StartupDialog(QDialog):
 
         # If there are recent files, show them in a list
         if self.recent_files:
-            recent_label = QLabel("Recent Images:")
-            layout.addWidget(recent_label)
-
             self.list_widget = QListWidget()
             for file_info in self.recent_files:
                 # file_info is a dictionary with 'path', 'open_time', 'save_time'
@@ -1105,9 +1108,6 @@ class StartupDialog(QDialog):
             clear_history_button.setIcon(QIcon('icons/delete-sweep-outline.svg'))
             clear_history_button.clicked.connect(self.clear_history)
             layout.addWidget(clear_history_button)
-        else:
-            no_recent_label = QLabel('No recent images.')
-            layout.addWidget(no_recent_label)
 
         self.setLayout(layout)
 
