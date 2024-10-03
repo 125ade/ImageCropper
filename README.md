@@ -30,7 +30,7 @@
 - **Configurable Crop Sizes**: Set custom crop sizes to capture the perfect image segment.
 - **Efficient Memory Usage**: Loads only parts of the image that are visible, ensuring smooth performance.
 - **Save Cropped Areas**: Save selected areas to your desired folder in real time.
-
+- **And more are coming soon!**
 ---
 
 ## 🔧 Installation
@@ -81,23 +81,14 @@
 ---
 
 ## 📂 Project Structure
-```
-ImageCropper/
-│
-├── ImageCropper.py      # Main application script
-├── requirements.txt     # Python dependencies
-├── README.md            # This README file
-└── logoImageCropper.jfif# Application logo
-```
+
 
 ---
 
 ## 🔮 Future Enhancements
-- **Zoom Functionality**: Ability to zoom in/out of images.
-- **Multi-cropping**: Select multiple areas to crop in one go.
 - **Advanced Editing**: Include image adjustments like brightness, contrast, and filters.
 - **Support for More File Formats**: Add support for additional image file types.
-
+- **Computer Vision Features**: Implement object detection and image segmentation.
 ---
 
 ## 📜 License
