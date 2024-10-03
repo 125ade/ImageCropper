@@ -1,6 +1,7 @@
 import sys
 import os
 import cv2
+import subprocess
 import numpy as np
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QLabel, QFileDialog, QVBoxLayout, QHBoxLayout, QWidget,
@@ -8,8 +9,9 @@ from PyQt5.QtWidgets import (
     QDialog, QListWidget, QListWidgetItem, QSizePolicy, QToolBox, QTextEdit, QLineEdit,
     QAbstractItemView, QScrollArea
 )
-from PyQt5.QtCore import Qt, QRectF, pyqtSignal, QSettings, QSize
-from PyQt5.QtGui import QImage, QPixmap, QPen, QColor, QPainter, QIcon
+from PyQt5.QtCore import Qt, QRectF, pyqtSignal, QSettings, QSize, QPoint
+from PyQt5.QtGui import QImage, QPixmap, QPen, QColor, QPainter, QIcon, QSyntaxHighlighter, QTextCharFormat, QFont
+from PyQt5.QtCore import QRegExp
 
 
 class ImageLabel(QLabel):
@@ -357,12 +359,24 @@ class ImageCropper(QMainWindow):
         self.toolbar_filter_action.triggered.connect(self.open_filter_dialog)
         self.toolbar.addAction(self.toolbar_filter_action)
 
+        # todo: finish to add the capability to use Computer vision IA inference on the cropped image
+        # Computer vision snipped action
+        cv_icon = QIcon('icons/brain.svg')
+        self.todo_action = QAction(cv_icon, 'Computer Vision', self)
+        self.todo_action.setShortcut('Ctrl+I')
+        self.todo_action.triggered.connect(self.todo)
+        self.toolbar.addAction(self.todo_action)
+
         # Information action
         self.toolbar.addSeparator()
         info_icon = QIcon('icons/information-outline.svg')
         info_action = QAction(info_icon, 'Information', self)
         info_action.triggered.connect(self.show_information)
         self.toolbar.addAction(info_action)
+
+    def todo(self):
+        """Open the Computer Vision Snippet Dialog."""
+        QMessageBox.information(self, "Work in Progress", "I am working on this, wait for the next update")
 
     def show_information(self):
         """Display the information dialog."""
@@ -1024,44 +1038,198 @@ class FilterDialog(QDialog):
         return filters
 
 
+from PyQt5.QtWidgets import (
+    QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLineEdit,
+    QTextEdit, QPushButton, QLabel
+)
+from PyQt5.QtGui import (
+    QSyntaxHighlighter, QTextCharFormat, QColor, QFont, QIcon
+)
+from PyQt5.QtCore import Qt, QRegularExpression
+import subprocess
+import sys
+
+
+class PythonSyntaxHighlighter(QSyntaxHighlighter):
+    """Syntax highlighter for Python code."""
+
+    def __init__(self, document):
+        super().__init__(document)
+        self._highlighting_rules = []
+
+        # Keyword formatting
+        keyword_format = QTextCharFormat()
+        keyword_format.setForeground(QColor("blue"))
+        keyword_format.setFontWeight(QFont.Bold)
+        keywords = [
+            "\\bdef\\b", "\\bclass\\b", "\\bimport\\b", "\\bfrom\\b",
+            "\\breturn\\b", "\\bif\\b", "\\belse\\b", "\\btry\\b",
+            "\\bexcept\\b", "\\bfinally\\b", "\\bfor\\b", "\\bwhile\\b",
+            "\\bbreak\\b", "\\bcontinue\\b", "\\bpass\\b", "\\bin\\b",
+            "\\bnot\\b", "\\band\\b", "\\bor\\b", "\\bis\\b", "\\bNone\\b",
+            "\\bTrue\\b", "\\bFalse\\b", "\\bwith\\b", "\\bas\\b",
+            "\\belif\\b"
+        ]
+        for keyword in keywords:
+            pattern = QRegularExpression(keyword)
+            self._highlighting_rules.append((pattern, keyword_format))
+
+        # String formatting
+        string_format = QTextCharFormat()
+        string_format.setForeground(QColor("magenta"))
+        self._highlighting_rules.append(
+            (QRegularExpression(r"\".*\""), string_format)
+        )
+        self._highlighting_rules.append(
+            (QRegularExpression(r"\'.*\'"), string_format)
+        )
+
+        # Comment formatting
+        comment_format = QTextCharFormat()
+        comment_format.setForeground(QColor("green"))
+        self._highlighting_rules.append(
+            (QRegularExpression(r"#.*"), comment_format)
+        )
+
+    def highlightBlock(self, text):
+        for pattern, fmt in self._highlighting_rules:
+            iterator = pattern.globalMatch(text)
+            while iterator.hasNext():
+                match = iterator.next()
+                start = match.capturedStart()
+                length = match.capturedLength()
+                self.setFormat(start, length, fmt)
+
+
 class CodeSnippetDialog(QDialog):
     """Dialog for entering custom filter code."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("New Filter")
         self.setWindowIcon(QIcon('icons/filter-plus-outline.svg'))
         self.resize(500, 400)
 
-        layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout(self)
 
-        self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("Filter Name")
-        layout.addWidget(self.name_edit)
+        # Filter name with icon
+        filter_name_layout = QHBoxLayout()
+        filter_name_icon = QLabel()
+        filter_name_icon.setPixmap(
+            QIcon('icons/filter-settings-outline.svg').pixmap(24, 24)
+        )
+        filter_name_layout.addWidget(filter_name_icon)
 
+        self.filter_name_edit = QLineEdit()
+        self.filter_name_edit.setPlaceholderText("Filter Name")
+        self.filter_name_edit.setClearButtonEnabled(True)
+        filter_name_layout.addWidget(self.filter_name_edit)
+        main_layout.addLayout(filter_name_layout)
+
+        # Libraries input
+        self.libraries_edit = QLineEdit()
+        self.libraries_edit.setPlaceholderText(
+            "Libraries (e.g., numpy, opencv-python==4.5.3)"
+        )
+        self.libraries_edit.setClearButtonEnabled(True)
+        main_layout.addWidget(self.libraries_edit)
+
+        # Code editor with syntax highlighting
         self.code_edit = QTextEdit()
         self.code_edit.setPlainText("""def apply(image):
     # image is a NumPy array (OpenCV image)
     # Modify and return the image
     return image
 """)
-        layout.addWidget(self.code_edit)
+        self.code_edit.setPlaceholderText(
+            "Write the import statements for the libraries and the filter function here."
+        )
+        main_layout.addWidget(self.code_edit)
+
+        # Syntax highlighter
+        self.highlighter = PythonSyntaxHighlighter(self.code_edit.document())
 
         # Buttons
         button_layout = QHBoxLayout()
-        self.ok_button = QPushButton("OK")
-        self.ok_button.clicked.connect(self.accept)
+        self.add_button = QPushButton("Add")
+        self.add_button.clicked.connect(self.handle_add)
+        button_layout.addWidget(self.add_button)
+
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.clicked.connect(self.reject)
-        button_layout.addStretch()
-        button_layout.addWidget(self.ok_button)
         button_layout.addWidget(self.cancel_button)
-        layout.addLayout(button_layout)
+        main_layout.addLayout(button_layout)
+
+    def handle_add(self):
+        """Install libraries, validate code, and add the filter."""
+        libraries = self.libraries_edit.text().split(',')
+        filter_code = self.code_edit.toPlainText()
+
+        try:
+            # Install libraries
+            for lib in libraries:
+                lib = lib.strip()
+                if lib:  # Ensure lib is not empty
+                    subprocess.check_call(
+                        [sys.executable, "-m", "pip", "install", lib]
+                    )
+
+            # Validate code
+            if self.validate_code(filter_code):
+                print("Filter added successfully.")
+                self.accept()
+            else:
+                raise Exception("The filter code is incorrect.")
+        except Exception as e:
+            self.show_error_dialog(str(e))
 
     def get_code(self):
         """Get the filter name and code snippet."""
-        name = self.name_edit.text()
+        name = self.filter_name_edit.text()
         code = self.code_edit.toPlainText()
         return name, code
+
+    def validate_code(self, code):
+        """Validate the filter code (can be extended)."""
+        try:
+            # Try to compile the code to catch syntax errors
+            compile(code, '<string>', 'exec')
+            return True
+        except SyntaxError:
+            return False
+
+    def show_error_dialog(self, error_message):
+        """Show error dialog with copy functionality."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Error")
+        dialog.setWindowIcon(QIcon('icons/alert-circle-outline.svg'))
+        dialog.resize(400, 200)
+
+        layout = QVBoxLayout(dialog)
+
+        # Error message label
+        error_label = QLabel(error_message)
+        error_label.setWordWrap(True)
+        layout.addWidget(error_label)
+
+        # Copy button
+        copy_button = QPushButton("Copy Error")
+        copy_button.setIcon(QIcon('icons/content-copy.svg'))
+        copy_button.clicked.connect(
+            lambda: self.copy_to_clipboard(error_message, copy_button)
+        )
+        layout.addWidget(copy_button)
+
+        dialog.exec_()
+
+    def copy_to_clipboard(self, text, button):
+        """Copy error to clipboard and change icon."""
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+
+        # Change icon to indicate success
+        button.setIcon(QIcon('icons/check-outline.svg'))
+
 
 
 class StartupDialog(QDialog):
