@@ -855,13 +855,13 @@ class ImageCropper(QMainWindow):
         crop_name = f"{name}_crop_{x}_{y}.png"
         crop_path = os.path.join(self.crop_folder, crop_name)
 
-        # Save the crop
+        # todo optimize this save the crop
         if len(crop.shape) == 2:
             # Grayscale or single-channel image
             cv2.imwrite(crop_path, crop)
         else:
             # Color image
-            cv2.imwrite(crop_path, cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
+            cv2.imwrite(crop_path, crop)
 
         # Update save time and crop folder in recent files
         from datetime import datetime
